@@ -8,6 +8,7 @@ import code.model._
 
 case object HelloQuestionActor
 case class IncomingQuestion(question: Question)
+case class IncomingAnswer(question: Question, answer: Answer)
 
 object QuestionServer extends LiftActor with ListenerManager {
 
@@ -15,5 +16,6 @@ object QuestionServer extends LiftActor with ListenerManager {
   
 	override def lowPriority = {
 	  case msg: IncomingQuestion => updateListeners(msg)
+	  case msg: IncomingAnswer => updateListeners(msg)
 	}	
 }

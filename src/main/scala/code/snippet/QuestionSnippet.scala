@@ -3,12 +3,16 @@ package code.snippet
 import net.liftweb._
 import http._
 import js.{JsCmds, JsCmd}
+import js.JE._
 import JsCmds._
 import js.jquery.JqJsCmds._
 import util._
 import util.Helpers._
 import common._
 import sitemap._
+
+import json._
+import json.JsonDSL._
 
 import java.util._
 
@@ -45,21 +49,62 @@ object QuestionSnippet {
     	"#create-question [onclick]" #> SHtml.ajaxInvoke(createQuestion)    
   }
 
-  def answerDialog = {
+  // second try
+  def answerDialogCallback = {
     
-    var answerMessage = ""
-    var id = ""
-    
-    def createAnswer() : JsCmd = {
-      println("create a new answer = " +
-          answerMessage + " according to question with id = " +
-          id)
+    def createAnswer(answerParam: JValue) : JsCmd = {
+      println("()()() try to create a new answer = " + answerParam)
+      
+      answerParam match {
+        case answer: JObject =>
+	      val answerMessage = answer.values.get("answer")
+	      val questionId = answer.values.get("questionId")	      
+	      println("()()() answerMessage = " + answerMessage +
+	          ", questionId = " + questionId)      
+	          
+	      if (answerMessage != None && questionId != None) {
+	    	  QuestionStorage.findQuestion(questionId.get.asInstanceOf[String]) match {
+	    	    case Some(question) =>
+	    	      	val answer = Answer(answerMessage.get.asInstanceOf[String])
+	    	    	question.answer = Some(answer)
+	    	    	println("Found question according to given id with the brand new answer = " + question)
+	    	    	QuestionServer ! IncomingAnswer(question, answer)
+	    	    case None => println("[WARN] No question according to id is found!")
+	    	  }
+	      }	else {
+	        println("[ WARN ] Some expected values are 'None' !!!")
+	      }          
+        case _ => println("[ WARN ] A JObject is expected !!!")
+      }            
       Noop
     }
     
-    "#modal-answer" #> SHtml.ajaxText(answerMessage, {answerMessage = _}) &
-    	"#modal-question-id" #> SHtml.ajaxText(id, {id = _}) &
-    	"#modal-answer-button [onclick]" #> SHtml.ajaxInvoke(createAnswer)
+    "#serverside-script" #> Script(
+    	Function("createAnswer", "answer" :: Nil,
+    	    SHtml.jsonCall(
+    	        JsVar("answer"),
+    	        createAnswer _
+    	    )._2.cmd    			
+    	)
+    )
+  }
+  
+  
+  def serverSideCall = {
+    println("PREPARING SERVERSIDE << hELLOwORLD >> CALL....")
+    "*" #> Script(
+		Function("serverSideCallback", "question" :: Nil,
+		    SHtml.ajaxCall(
+		    	JsVar("question"),
+		    	(question: String) => serverSideCallback(question)
+		    )._2.cmd
+		)
+	)
+  }
+  
+  private def serverSideCallback(question: String) : JsCmd = {
+    println(">>>>>>>>> SERVER SIDE CALLBACK INVOKATION / Question = " + question)
+    Noop
   }
   
 }

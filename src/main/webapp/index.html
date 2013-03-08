@@ -10,21 +10,21 @@
     <script data-lift="head" id="knockout" src="/js/knockout/knockout-2.2.1.js" type="text/javascript"></script>    
     
     <div data-lift="tail">
-	    <div data-lift="QuestionSnippet.answerDialog" id="answer-dialog" class="reveal-modal [expand, xlarge, large, medium, small]">
+	    <div data-lift="QuestionSnippet.answerDialogCallback" id="answer-dialog" class="reveal-modal [expand, xlarge, large, medium, small]">
 		
 			<div class="row">
 				<span id="modal-question"></span>
 			</div>
 			<div class="row">
 				<input type="text" id="modal-answer"></input>
-				<input type="hidden" id="modal-question-id"></input>
 			</div>
 			<div class="row">
-				<button id="modal-answer-button" class="button">Answer question</button>
-			</div>
-			
+				<button id="modal-answer-button" class="button" onclick="sendAnswerToServer();">Answer question</button>
+			</div>		
 	
 		  <a class="close-reveal-modal">&#215;</a>
+		  		  
+		  <div id="serverside-script"></div>		  
 		</div>
     </div>
     
@@ -68,41 +68,107 @@
 						<h3><small data-bind="text: message"></small></h3>
 					</div>
 					<div class="row">
-         				<span class="radius success label" data-bind="text: timestamp"></span>
+						<div class="six columns">
+         					<span class="radius success label" data-bind="text: timestamp"></span>
+						</div>
+						<div data-bind="if: $data.answer != null" class="six columns">
+							<div class="radius label">Answer: <span data-bind="text: $data.answer.message"></span></div>
+						</div>
     				</div>
 				</div>
 				<div class="five columns">
-					<button 
-						class="large button expand" 
-						style="margin-top: 20px;"
-						data-bind="click: $parent.prepareAnswer">Answer</button>
+					<div data-bind="if: $data.answer == null">
+						<button 
+							class="large button expand" 
+							style="margin-top: 20px;"
+							data-bind="click: $parent.prepareAnswer">Answer</button>
+					</div>
 				</div>
 			<div/>
 		</div>
 	</script>	
+
+	<!-- SIMPLE TEST -->
+	<div data-lift="QuestionSnippet.serverSideCall"></div>
 
 	<script>
 		function removeQuestionsSection() {
 			$("#questions").hide();
 		}
 		
-		function Question(question) {
+		function Answer(answer) {
+			this.message = ko.observable(answer.msg);
+			this.timestamp = ko.observable(answer.timestamp);
+		}
+		
+		function Question(question) {						
 			this.id = ko.observable(question.id);
 			this.message = ko.observable(question.msg);
 			this.timestamp = ko.observable(question.timestamp);
+			var answer = question.answer;
+			console.log("ANSWER = " + answer);
+			if (answer != null) this.answer = new Answer(answer);
+			else this.answer = null;
 		}
 		
 		function QuestionsModel() {
 			var self = this;			
 			self.questions = ko.observableArray([]);
 			
+			self.answerForQuestion = null
+			
 			self.prepareAnswer = function(question) {
 				// fill data into dialog
-				$("#modal-question").html(question.message())
-				$("#modal-question-id").val(question.id())
+				$("#modal-question").html(question.message());
+				$("#modal-answer").val("");
+				// $("#modal-question-id").val(question.id());
+				self.answerForQuestion = question.id();				
 				
 				// show modal dialog
 				$("#answer-dialog").reveal();
+				
+				// simple test of server-side call
+				serverSideCallback(question.message());
+			}
+
+			sendAnswerToServer = function() {
+				console.log("SEND ANSWER TO SERVER...")
+				var questionId = self.answerForQuestion;
+				if (questionId != null) {
+					// make validation - is answer not empty
+					var answer = $("#modal-answer").val();					
+					if (answer != "") {
+						// create json param
+						var json = {
+							"questionId" : questionId,
+							"answer" : answer						
+						};
+						// send to server
+						createAnswer(json);
+						console.log("FINISHED SENDING ANSWER TO SERVER : )");
+						
+						// close the reveal dialog
+						$("#answer-dialog").trigger("reveal:close");
+					} else {
+						console.log("NO ANSWER IS GIVEN !! ABORT...")
+					}
+				}
+			}
+			
+			addAnswer = function(questionWithAnswer) {
+				console.log("Incoming answer .. .. ..");
+
+				// find existing question one
+				var id = questionWithAnswer.id;
+				ko.utils.arrayForEach(self.questions(), function(question) {
+					console.log("question: " + question.message);
+					if (question.id() == id) {
+						console.log(">>>> SWAP IT : !!! Found the question inside the ko array! id = " + id);
+						//question.answer(new Answer(questionWithAnswer.answer)); // DOES NOT WORK
+						self.questions.setAt(self.questions.indexOf(question), new Question(questionWithAnswer))
+						// !!! TODO breaking the loop is not really possible using foreach of knockoutJS !!!!
+					}
+				});
 			}
 			
 			addQuestion = function(question) {				
@@ -120,6 +186,14 @@
 		}	
 		
 		// register the model
+		
+		// custom function to swap ( http://stackoverflow.com/questions/7317907/how-to-add-insert-an-item-into-an-observablearray-at-a-certain-position-with-kno )
+		ko.observableArray.fn.setAt = function(index, value) {
+ 		    this.valueWillMutate();
+    		this()[index] = value;
+    		this.valueHasMutated();
+		}
+		
 		ko.applyBindings(new QuestionsModel());		
 	</script>
 	
